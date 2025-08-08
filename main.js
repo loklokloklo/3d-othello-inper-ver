@@ -422,6 +422,7 @@ function isLegalMove(board, x, y, z, currentTurn) {
 }
 
 function showLegalMoveIndicator(x, y, z) {
+  console.log("showLegalMoveIndicator:", x, y, z);
   const geometry = new THREE.SphereGeometry(stoneRadius * 0.6, 16, 16);
   const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
   const sphere = new THREE.Mesh(geometry, material);
@@ -686,5 +687,6 @@ function updateStoneCountDisplay() {
     display.textContent = `黒: ${count.black} ／ 白: ${count.white}`;
   }
 }
+
 
 
