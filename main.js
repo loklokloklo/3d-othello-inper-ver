@@ -421,6 +421,23 @@ function isLegalMove(board, x, y, z, currentTurn) {
   return legal;
 }
 
+function showLegalMoveIndicator(x, y, z) {
+  const geometry = new THREE.SphereGeometry(stoneRadius * 0.6, 16, 16);
+  const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+  const sphere = new THREE.Mesh(geometry, material);
+
+  sphere.userData.isLegalMoveMarker = true;
+
+  sphere.position.set(
+    (x + 1.0) * spacing,
+    (y + 1.0) * spacing,
+    (z + 1.0) * spacing
+  );
+
+  sphere.name = 'legalMoveIndicator';
+  scene.add(sphere);
+}
+
 
 function flipStones(x, y, z) {
   const opponent = currentTurn === 'black' ? 'white' : 'black';
@@ -669,4 +686,5 @@ function updateStoneCountDisplay() {
     display.textContent = `黒: ${count.black} ／ 白: ${count.white}`;
   }
 }
+
 
