@@ -40,7 +40,7 @@ const size = 4;
 
 function init() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#ccf2ff'); // 薄い水色の背景
+  scene.background = new THREE.Color('#b7e1b0'); // 薄い緑色の背景
 
   camera = new THREE.PerspectiveCamera(
     45,
@@ -664,4 +664,5 @@ function updateStoneCountDisplay() {
     display.textContent = `黒: ${count.black} ／ 白: ${count.white}`;
   }
 }
+
 
