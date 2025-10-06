@@ -12,7 +12,7 @@ let scene, camera, renderer, labelRenderer, controls;
 let boardGroup;
 let currentTurn = 'black'; // 現在の手番（'black' または 'white'）
 // グローバル変数に追加
-let gameStarted = false;
+let gameStarted = 0;
 // グローバル領域に追加（scene, camera, などと同じ場所）
 let board = [];
 const stoneRadius = 0.3;
@@ -20,6 +20,7 @@ let lastPlacedStone = null;
 const stoneMap = new Map(); // キー = "x,y,z", 値 = stone Mesh
 const moveHistory = []; // 各手の記録 ["2,3,1", "1,1,1", ...]
 let firstPlayer = 'black';
+let lastPlacedColor = null; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyDpXdLFl05RGNS7sh0FEbFAtcM8aWgMVvg",
@@ -51,14 +52,9 @@ function init() {
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace; // ← ここだけ変更
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-renderer.setClearColor('#ccf2ff'); // 背景を薄い水色に設定（リロード時含む）
-document.body.appendChild(renderer.domElement);
-
-
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor('#ccf2ff'); // 背景を薄い水色に設定（リロード時含む）
+  document.body.appendChild(renderer.domElement);
 
   labelRenderer = new CSS2DRenderer();
   labelRenderer.setSize(window.innerWidth, window.innerHeight);
@@ -71,28 +67,17 @@ document.body.appendChild(renderer.domElement);
   controls.enableZoom = false;
   controls.target.set(3, 3, 3);
 
-  // ======== ライトの設定 ========
+  // ライト
+  const ambientLight = new THREE.AmbientLight(0xffffff, 5);
+  scene.add(ambientLight);
 
-// 柔らかい全体照明（強すぎ注意）
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
-scene.add(ambientLight);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight.position.set(10, 10, 10);
+  scene.add(directionalLight);
 
-// 6方向からの平行光で全体を包む（どの向きでも白く見えるように）
-const directions = [
-  [10, 0, 0],    // +X
-  [-10, 0, 0],   // -X
-  [0, 10, 0],    // +Y
-  [0, -10, 0],   // -Y
-  [0, 0, 10],    // +Z
-  [0, 0, -10]    // -Z
-];
+  const axesHelper = new THREE.AxesHelper(10); // 長さ10
 
-for (const [x, y, z] of directions) {
-  const light = new THREE.DirectionalLight(0xffffff, 0.4); // 控えめな強さ
-  light.position.set(x, y, z);
-  scene.add(light);
-}
-
+scene.add(axesHelper);
 
 
 for (let x = 0; x < size; x++) {
@@ -237,7 +222,7 @@ if (blackButton && whiteButton && turnUI) {
     firstPlayer = 'black';
     currentTurn = 'black';
     turnUI.style.display = 'none';
-    gameStarted = true;
+    gameStarted = 2;
     showAllLegalMoves(); // 手番ごとに更新
 
   });
@@ -246,7 +231,7 @@ whiteButton.addEventListener('click', () => {
   firstPlayer = 'white';
     currentTurn = 'white';
     turnUI.style.display = 'none';
-    gameStarted = true;
+    gameStarted = 2;
     showAllLegalMoves(); // 手番ごとに更新
 
   });
@@ -257,7 +242,7 @@ function createStone(x, y, z, color, isLastPlaced = false) {
 
   if (isLastPlaced) {
     // 黒ならダークレッド寄り、白ならピンク寄り
-    finalColor = (color === 0x000000) ? 0x8B0000 : 0xFFB6C1;
+    finalColor = (color === 0x000000) ? 0x4B0000 : 0xAA6666;
   }
 
   const geometry = new THREE.SphereGeometry(stoneRadius, 32, 32);
@@ -285,7 +270,7 @@ function revertPreviousRedStone(color) {
 }
 
 window.addEventListener('pointerdown', (event) => {
-  if (!gameStarted) return;
+  if (gameStarted !== 2) return;
 
   const mouse = new THREE.Vector2();
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -309,33 +294,41 @@ window.addEventListener('pointerdown', (event) => {
 
     // 石を置く前に、前の赤い石を元の色に戻す
     if (lastPlacedStone) {
-      const [lx, ly, lz] = lastPlacedStone;
-      const prevColor = currentTurn === 'black' ? 0xffffff : 0x000000;
+      const prevColor = lastPlacedColor === 'black' ? 0x000000 : 0xffffff;
       revertPreviousRedStone(prevColor);
     }
 
     const color = currentTurn === 'black' ? 0x000000 : 0xffffff;
     createStone(x, y, z, color, true); // ← 最後に置いた石だけ赤
 
+    // 石を置いた後
     board[x][y][z] = currentTurn;
     placedStones.add(key);
-    lastPlacedStone = [x, y, z]; // ここで更新
+    lastPlacedStone = [x, y, z];
+    lastPlacedColor = currentTurn;
 
-    moveHistory.push({
-      player: currentTurn,
-      move: [x, y, z]
-    });
-    
-    flipStones(x, y, z, currentTurn); // ← 石をひっくり返す処理
+    moveHistory.push({ player: currentTurn, move: [x, y, z] });
+
+    flipStones(x, y, z, currentTurn); 
+    updateStoneCountDisplay();
+
+    // 手番切り替え
     currentTurn = currentTurn === 'black' ? 'white' : 'black';
-    updateStoneCountDisplay(); // ← 追加
-
     showAllLegalMoves();
-    checkGameEnd(); // ← ここで勝敗チェック
-    // ゲームがまだ続いている場合、次の手番に合法手がなければパス
-if (!hasAnyLegalMove(currentTurn)) {
-  showPassPopup(); // パスを表示してボタン押させる
-}
+
+   // 次の手番に合法手がなければパス
+    if (gameStarted === 2){
+      if (!hasAnyLegalMove(currentTurn)) {
+      // 両者とも置けなければゲーム終了
+        const otherPlayer = currentTurn === 'black' ? 'white' : 'black';
+        if (!hasAnyLegalMove(otherPlayer)) {
+          checkGameEnd();
+        } else {
+          showPassPopup(); // パス表示
+          // パス OK ボタンで currentTurn が再度切り替わるのでここでは変更不要
+        }
+      }
+    }
 
   }
 });
@@ -420,7 +413,6 @@ function isLegalMove(board, x, y, z, currentTurn) {
 
   return legal;
 }
-
 function showLegalMoveIndicator(x, y, z) {
   const geometry = new THREE.SphereGeometry(stoneRadius * 0.6, 16, 16);
   const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
@@ -437,7 +429,6 @@ function showLegalMoveIndicator(x, y, z) {
   sphere.name = 'legalMoveIndicator';
   scene.add(sphere);
 }
-
 
 function flipStones(x, y, z) {
   const opponent = currentTurn === 'black' ? 'white' : 'black';
@@ -546,7 +537,7 @@ function showGameResultUI(result) {
   container.style.zIndex = '100';
 
   const text = document.createElement('p');
-  text.textContent = `勝者: ${result.winner}（黒: ${result.score.black} - 白: ${result.score.white}）`;
+  text.textContent = `勝者: ${result.result}（黒: ${result.score.black} - 白: ${result.score.white}）`;
   container.appendChild(text);
 
   // 棋譜送信ボタン
@@ -602,51 +593,32 @@ function showNewGameButton() {
 
 
 function checkGameEnd() {
-  if (!gameStarted) return;
+  if (gameStarted !== 2) return;
 
-  const boardFull = placedStones.size >= size * size * size;
-  const blackHasMove = hasAnyLegalMove('black');
-  const whiteHasMove = hasAnyLegalMove('white');
+  const result = countStones();
+  let winner = result.black > result.white ? 'black' :
+               result.white > result.black ? 'white' : 'draw';
 
-  if (boardFull || (!blackHasMove && !whiteHasMove)) {
-    const result = countStones();
-    let winner = null;
+  const formattedMoves = moveHistory.map((entry, i) => {
+    if (entry.pass) {
+      return { turn: i + 1, player: entry.player, pass: true };
+    } else {
+      const [x, y, z] = entry.move;
+      return { turn: i + 1, player: entry.player, x: x + 1, y: y + 1, z: z + 1 };
+    }
+  });
 
-    if (result.black > result.white) winner = 'black';
-    else if (result.white > result.black) winner = 'white';
-    else winner = 'draw';
+  const gameData = {
+    first: firstPlayer,
+    result: winner,
+    score: result,
+    moves: formattedMoves
+  };
 
-    const formattedMoves = moveHistory.map((entry, i) => {
-      if (entry.pass) {
-        return {
-          turn: i + 1,
-          player: entry.player,
-          pass: true
-        };
-      } else {
-        const [x, y, z] = entry.move;
-        return {
-          turn: i + 1,
-          player: entry.player,
-          x: x + 1, // 1-indexed に変換
-          y: y + 1,
-          z: z + 1
-        };
-      }
-    });
-
-    // 最終的に送信する棋譜データ
-    const gameData = {
-      first: firstPlayer,       // 'black' または 'white'
-      result: winner,           // 'black' / 'white' / 'draw'
-      score: result,            // { black: 〜, white: 〜 }
-      moves: formattedMoves     // 各手の履歴（1-indexed）
-    };
-
-    console.log('🎯 ゲーム終了:', gameData);
-    showGameResultUI(gameData); // UIに表示 or サーバに送信
-  }
+  console.log('🎯 ゲーム終了:', gameData);
+  showGameResultUI(gameData);
 }
+
 function hasAnyLegalMove(player) {
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
@@ -659,8 +631,10 @@ function hasAnyLegalMove(player) {
 }
 
 function showPassPopup() {
+  if (gameStarted !== 2) return; // ゲーム開始状態でなければ表示しない
   document.getElementById('pass-popup').style.display = 'block';
 }
+
 
 function hidePassPopup() {
   document.getElementById('pass-popup').style.display = 'none';
@@ -668,16 +642,20 @@ function hidePassPopup() {
 
 document.getElementById('pass-ok-button').addEventListener('click', () => {
   hidePassPopup();
+
+  // パスを履歴に追加
   moveHistory.push({ player: currentTurn, pass: true });
 
+  // 手番を切り替え
   currentTurn = currentTurn === 'black' ? 'white' : 'black';
   showAllLegalMoves();
 
-  // 再度合法手がなければゲーム終了
-  if (!hasAnyLegalMove(currentTurn)) {
+  // 両者とも合法手がない場合はゲーム終了
+  if (!hasAnyLegalMove(currentTurn) && !hasAnyLegalMove(currentTurn === 'black' ? 'white' : 'black')) {
     checkGameEnd();
   }
 });
+
 
 function updateStoneCountDisplay() {
   const count = countStones();
@@ -686,7 +664,4 @@ function updateStoneCountDisplay() {
     display.textContent = `黒: ${count.black} ／ 白: ${count.white}`;
   }
 }
-
-
-
 
