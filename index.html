@@ -99,9 +99,8 @@
 
   <!-- 手番選択UI -->
   <div id="turn-selection">
-    <h2>手番を選んでください</h2>
+    <h2>黒の先手からプレイを開始してください</h2>
     <button id="black-button">先手（黒）</button>
-    <button id="white-button">後手（白）</button>
   </div>
 
   <!-- パス用ポップアップ -->
@@ -169,16 +168,19 @@ align-items: center;
     </ul>
 
     <p>
-      これらのデータは <strong>AIの研究目的のみに使用</strong> し、それ以外の目的には一切使用しません。
+      これらのデータは <strong>オセロAIの研究目的のみに使用</strong> し、それ以外の目的には一切使用しません。
     </p>
 
     <p style="margin-top: 1.5rem;"><strong>【重要なご案内】</strong></p>
     <ul style="text-align: left; display: inline-block;">
-      <li><strong>「了承する」ボタンを押した直後に「あなたはパスです」と表示されることがありますが、これはバグです。</strong><br>
-      そのまま「OK」ボタンを押して、手番選択画面へお進みください。</li><br>
+      <li><strong>「了承する」ボタンを押した直後に「あなたはパスです」と表示されますが、これはバグです。</strong><br>
+      そのまま「OK」ボタンを押してください。</li><br>
 
       <li><strong>このゲームでは一度石を置くと取り消しはできません。</strong><br>
       慎重に操作を行ってください。</li><br>
+
+      <li>オセロ盤を回転させたいときは、<strong>背景などの何も無い部分でドラッグ</strong>してください。<br>
+      盤に触った状態で回転させると石が置かれることがありますのでご注意ください。</li><br>
       
       <li>本ゲームでは、<strong>直前に置かれた石が赤い透明な膜で覆われることで強調表示されます。</strong><br>
       <strong>黒色は茶色</strong>っぽく、<strong>白色はピンク色</strong>っぽく見えます</li>
@@ -217,5 +219,4 @@ align-items: center;
 
 </body>
 </html>
-
 
