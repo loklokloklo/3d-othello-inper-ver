@@ -215,21 +215,11 @@ function animate() {
 // 手番選択画面がクリックされたら非表示にする
 const turnUI = document.getElementById('turn-selection');
 const blackButton = document.getElementById('black-button');
-const whiteButton = document.getElementById('white-button');
 
-if (blackButton && whiteButton && turnUI) {
+if (blackButton && turnUI) {
   blackButton.addEventListener('click', () => {
     firstPlayer = 'black';
     currentTurn = 'black';
-    turnUI.style.display = 'none';
-    gameStarted = 2;
-    showAllLegalMoves(); // 手番ごとに更新
-
-  });
-
-whiteButton.addEventListener('click', () => {
-  firstPlayer = 'white';
-    currentTurn = 'white';
     turnUI.style.display = 'none';
     gameStarted = 2;
     showAllLegalMoves(); // 手番ごとに更新
@@ -664,7 +654,3 @@ function updateStoneCountDisplay() {
     display.textContent = `黒: ${count.black} ／ 白: ${count.white}`;
   }
 }
-
-
-
-
