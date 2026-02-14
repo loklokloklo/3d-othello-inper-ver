@@ -338,12 +338,19 @@ window.addEventListener('pointerdown', (event) => {
     showAllLegalMoves();
 
     // 次の手番に合法手がなければパス
+    console.log('🔵 パスチェック開始 / currentTurn=', currentTurn, '/ gameStarted=', gameStarted);
     if (gameStarted === 2) {
-      if (!hasAnyLegalMove(currentTurn)) {
+      const currentHasMove = hasAnyLegalMove(currentTurn);
+      console.log('🔵 currentTurn(' + currentTurn + ') has move:', currentHasMove);
+      if (!currentHasMove) {
         const otherPlayer = currentTurn === 'black' ? 'white' : 'black';
-        if (!hasAnyLegalMove(otherPlayer)) {
+        const otherHasMove = hasAnyLegalMove(otherPlayer);
+        console.log('🔵 otherPlayer(' + otherPlayer + ') has move:', otherHasMove);
+        if (!otherHasMove) {
+          console.log('🔴 両者とも合法手なし → checkGameEnd');
           checkGameEnd();
         } else {
+          console.log('🟢 パス発生 → showPassPopup 呼び出し');
           showPassPopup();
         }
       }
@@ -631,28 +638,34 @@ function hasAnyLegalMove(player) {
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
-        if (isLegalMove(board, x, y, z, player)) return true;
+        if (isLegalMove(board, x, y, z, player)) {
+          console.log('✅ hasAnyLegalMove(' + player + ') = true, 合法手:', x, y, z);
+          return true;
+        }
       }
     }
   }
+  console.log('🚫 hasAnyLegalMove(' + player + ') = false');
   return false;
 }
 
 function showPassPopup() {
-  if (gameStarted !== 2) return;
+  console.log('🟡 showPassPopup 呼び出し / gameStarted=', gameStarted, '/ currentTurn=', currentTurn);
+  if (gameStarted !== 2) {
+    console.log('❌ showPassPopup: gameStarted !== 2 なので return');
+    return;
+  }
   isPassPopupVisible = true;
 
-  // ========================================
-  // BUG FIX: HTMLの #pass-popup は CSS で
-  //   display: none !important
-  //   #pass-popup.visible { display: flex !important }
-  // と定義されているため、style.display='block' では
-  // !important に負けて表示されない。
-  // classList.add('visible') で正しく表示する。
-  // ========================================
-  document.getElementById('pass-popup').classList.add('visible');
+  const popup = document.getElementById('pass-popup');
+  console.log('🟡 pass-popup 要素:', popup);
+  if (popup) {
+    console.log('🟡 classList before:', popup.classList.toString());
+    popup.classList.add('visible');
+    console.log('🟡 classList after:', popup.classList.toString());
+    console.log('🟡 computed display:', window.getComputedStyle(popup).display);
+  }
 
-  // 1手戻すボタンを無効化
   const undoBtn = document.getElementById('undo-button');
   if (undoBtn) undoBtn.disabled = true;
 }
