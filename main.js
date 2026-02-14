@@ -223,12 +223,32 @@ function init() {
 }
 
 function createAxisLabel(text, x, y, z) {
-  const div = document.createElement('div');
-  div.className = 'label';
-  div.textContent = text;
-  const label = new CSS2DObject(div);
-  label.position.set(x, y, z);
-  scene.add(label);
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  // 背景は描かない（完全透明）
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 黒い文字のみ
+  ctx.fillStyle = 'black';
+  ctx.font = 'bold 72px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false
+  });
+
+  const sprite = new THREE.Sprite(material);
+  sprite.position.set(x, y, z);
+  sprite.scale.set(1.2, 1.2, 1.2);
+  scene.add(sprite);
 }
 
 function animate() {
@@ -338,19 +358,12 @@ window.addEventListener('pointerdown', (event) => {
     showAllLegalMoves();
 
     // 次の手番に合法手がなければパス
-    console.log('🔵 パスチェック開始 / currentTurn=', currentTurn, '/ gameStarted=', gameStarted);
     if (gameStarted === 2) {
-      const currentHasMove = hasAnyLegalMove(currentTurn);
-      console.log('🔵 currentTurn(' + currentTurn + ') has move:', currentHasMove);
-      if (!currentHasMove) {
+      if (!hasAnyLegalMove(currentTurn)) {
         const otherPlayer = currentTurn === 'black' ? 'white' : 'black';
-        const otherHasMove = hasAnyLegalMove(otherPlayer);
-        console.log('🔵 otherPlayer(' + otherPlayer + ') has move:', otherHasMove);
-        if (!otherHasMove) {
-          console.log('🔴 両者とも合法手なし → checkGameEnd');
+        if (!hasAnyLegalMove(otherPlayer)) {
           checkGameEnd();
         } else {
-          console.log('🟢 パス発生 → showPassPopup 呼び出し');
           showPassPopup();
         }
       }
@@ -373,20 +386,100 @@ function clearLegalMoveMarkers() {
 function showAllLegalMoves() {
   clearLegalMoveMarkers();
 
+  const legalMovesList = [];
+
   for (let x = 0; x < 4; x++) {
     for (let y = 0; y < 4; y++) {
       for (let z = 0; z < 4; z++) {
         const legal = isLegalMove(board, x, y, z, currentTurn);
         if (legal) {
           showLegalMoveIndicator(x, y, z);
+          legalMovesList.push([x, y, z]);
         }
       }
     }
   }
+
   // ========================================
-  // BUG FIX: ここに閉じ括弧を追加（元コードでは } が不足しており
-  // placedStones の宣言が関数内部に入り込んでいた）
+  // 開発者ツール：各合法手の「返る石に隣接する空きマス総数」をログ出力
   // ========================================
+  logLegalMovesInfo(legalMovesList, currentTurn);
+}
+
+/**
+ * 各合法手について、置いたときに返る相手の石に
+ * 隣接する空きマス（26近傍）の総数をコンソールに出力する。
+ *
+ * 「置こうとしているマス自体」は空きマスとして扱わない。
+ *
+ * 出力形式: "(x,y,z):N" × 合法手数
+ */
+function logLegalMovesInfo(legalMoves, player) {
+  if (legalMoves.length === 0) return;
+
+  const opponent = player === 'black' ? 'white' : 'black';
+  const results = [];
+
+  for (const [mx, my, mz] of legalMoves) {
+    // どの相手の石が返るかを収集
+    const flippedStones = [];
+
+    for (const [dx, dy, dz] of directions) {
+      const line = [];
+      let nx = mx + dx;
+      let ny = my + dy;
+      let nz = mz + dz;
+
+      while (
+        nx >= 0 && nx < size &&
+        ny >= 0 && ny < size &&
+        nz >= 0 && nz < size &&
+        board[nx][ny][nz] === opponent
+      ) {
+        line.push([nx, ny, nz]);
+        nx += dx;
+        ny += dy;
+        nz += dz;
+      }
+
+      // 方向の末端が自分の石なら、この方向の石は返る
+      if (
+        line.length > 0 &&
+        nx >= 0 && nx < size &&
+        ny >= 0 && ny < size &&
+        nz >= 0 && nz < size &&
+        board[nx][ny][nz] === player
+      ) {
+        for (const s of line) flippedStones.push(s);
+      }
+    }
+
+    // 返る石に隣接する空きマスを Set で管理して重複を排除してカウント
+    // ・盤外は除外
+    // ・置こうとしているマス(mx,my,mz)は空きマスとして扱わない
+    const emptySet = new Set();
+    for (const [fx, fy, fz] of flippedStones) {
+      for (const [dx, dy, dz] of directions) {
+        const ax = fx + dx;
+        const ay = fy + dy;
+        const az = fz + dz;
+        if (
+          ax >= 0 && ax < size &&
+          ay >= 0 && ay < size &&
+          az >= 0 && az < size &&
+          board[ax][ay][az] === null &&
+          !(ax === mx && ay === my && az === mz) // 置く場所は除外
+        ) {
+          emptySet.add(`${ax},${ay},${az}`); // 同じマスを複数の石から参照しても1回だけ数える
+        }
+      }
+    }
+    const emptyCount = emptySet.size;
+
+    results.push(`(${mx+1},${my+1},${mz+1}):${emptyCount}`);
+  }
+
+  console.log('[合法手 空きマス数] ' + results.join('  '));
 }
 
 function isLegalMove(board, x, y, z, currentTurn) {
@@ -630,7 +723,6 @@ function checkGameEnd() {
     moves: formattedMoves
   };
 
-  console.log('🎯 ゲーム終了:', gameData);
   showGameResultUI(gameData);
 }
 
@@ -638,34 +730,28 @@ function hasAnyLegalMove(player) {
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
-        if (isLegalMove(board, x, y, z, player)) {
-          console.log('✅ hasAnyLegalMove(' + player + ') = true, 合法手:', x, y, z);
-          return true;
-        }
+        if (isLegalMove(board, x, y, z, player)) return true;
       }
     }
   }
-  console.log('🚫 hasAnyLegalMove(' + player + ') = false');
   return false;
 }
 
 function showPassPopup() {
-  console.log('🟡 showPassPopup 呼び出し / gameStarted=', gameStarted, '/ currentTurn=', currentTurn);
-  if (gameStarted !== 2) {
-    console.log('❌ showPassPopup: gameStarted !== 2 なので return');
-    return;
-  }
+  if (gameStarted !== 2) return;
   isPassPopupVisible = true;
 
-  const popup = document.getElementById('pass-popup');
-  console.log('🟡 pass-popup 要素:', popup);
-  if (popup) {
-    console.log('🟡 classList before:', popup.classList.toString());
-    popup.classList.add('visible');
-    console.log('🟡 classList after:', popup.classList.toString());
-    console.log('🟡 computed display:', window.getComputedStyle(popup).display);
-  }
+  // ========================================
+  // BUG FIX: HTMLの #pass-popup は CSS で
+  //   display: none !important
+  //   #pass-popup.visible { display: flex !important }
+  // と定義されているため、style.display='block' では
+  // !important に負けて表示されない。
+  // classList.add('visible') で正しく表示する。
+  // ========================================
+  document.getElementById('pass-popup').classList.add('visible');
 
+  // 1手戻すボタンを無効化
   const undoBtn = document.getElementById('undo-button');
   if (undoBtn) undoBtn.disabled = true;
 }
@@ -823,7 +909,6 @@ function undoLastMove() {
  */
 function undoCore() {
   if (moveHistory.length === 0) {
-    console.log('⚠️ 戻せる手がありません');
     return;
   }
 
@@ -877,5 +962,4 @@ function undoCore() {
   updateStoneCountDisplay();
   showAllLegalMoves();
 
-  console.log(`✅ 1手戻しました。棋譜残り: ${moveHistory.length}手 / 次の手番: ${currentTurn}`);
 }
