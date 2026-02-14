@@ -638,7 +638,7 @@ function hasAnyLegalMove(player) {
 
 function showPassPopup() {
   if (gameStarted !== 2) return;
-  document.getElementById('pass-popup').style.display = 'flex';
+  document.getElementById('pass-popup').style.display = 'block';
 }
 
 function hidePassPopup() {
@@ -855,4 +855,5 @@ function undoCore() {
 
   console.log(`✅ 1手戻しました。棋譜残り: ${moveHistory.length}手 / 次の手番: ${currentTurn}`);
 }
+
 
