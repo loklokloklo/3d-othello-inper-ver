@@ -641,7 +641,16 @@ function hasAnyLegalMove(player) {
 function showPassPopup() {
   if (gameStarted !== 2) return;
   isPassPopupVisible = true;
-  document.getElementById('pass-popup').style.display = 'block';
+
+  // ========================================
+  // BUG FIX: HTMLの #pass-popup は CSS で
+  //   display: none !important
+  //   #pass-popup.visible { display: flex !important }
+  // と定義されているため、style.display='block' では
+  // !important に負けて表示されない。
+  // classList.add('visible') で正しく表示する。
+  // ========================================
+  document.getElementById('pass-popup').classList.add('visible');
 
   // 1手戻すボタンを無効化
   const undoBtn = document.getElementById('undo-button');
@@ -649,7 +658,10 @@ function showPassPopup() {
 }
 
 function hidePassPopup() {
-  document.getElementById('pass-popup').style.display = 'none';
+  // ========================================
+  // BUG FIX: 同上。classList.remove('visible') で非表示にする。
+  // ========================================
+  document.getElementById('pass-popup').classList.remove('visible');
   isPassPopupVisible = false;
 
   // 1手戻すボタンを再有効化
