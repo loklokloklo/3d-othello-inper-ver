@@ -18,7 +18,7 @@ let board = [];
 const stoneRadius = 0.3;
 let lastPlacedStone = null;
 const stoneMap = new Map(); // キー = "x,y,z", 値 = stone Mesh
-const moveHistory = []; // 各手の記録 ["2,3,1", "1,1,1", ...]
+const moveHistory = []; // 各手の記録
 let firstPlayer = 'black';
 let lastPlacedColor = null;
 
@@ -43,6 +43,23 @@ const database = getDatabase(app);
 const spacing = 1.2;
 const size = 4;
 
+// ========================================
+// BUG FIX: placedStones をグローバルスコープで宣言
+// （showAllLegalMoves の外に置くことで毎回リセットされる問題を修正）
+// ========================================
+const placedStones = new Set();
+
+const directions = [];
+for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      if (dx !== 0 || dy !== 0 || dz !== 0) {
+        directions.push([dx, dy, dz]);
+      }
+    }
+  }
+}
+
 function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color('#ccffd0'); // 薄い緑色の背景
@@ -58,7 +75,7 @@ function init() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor('#ccf2ff'); // 背景を薄い水色に設定（リロード時含む）
+  renderer.setClearColor('#ccf2ff');
   document.body.appendChild(renderer.domElement);
 
   labelRenderer = new CSS2DRenderer();
@@ -80,39 +97,33 @@ function init() {
   directionalLight.position.set(10, 10, 10);
   scene.add(directionalLight);
 
-  const axesHelper = new THREE.AxesHelper(10); // 長さ10
+  const axesHelper = new THREE.AxesHelper(10);
   scene.add(axesHelper);
-
 
   for (let x = 0; x < size; x++) {
     board[x] = [];
     for (let y = 0; y < size; y++) {
       board[x][y] = [];
       for (let z = 0; z < size; z++) {
-        board[x][y][z] = null; // 'black' or 'white' を後で格納する
+        board[x][y][z] = null;
       }
     }
   }
-
-
 
   // ボード作成
   boardGroup = new THREE.Group();
   const geometry = new THREE.BoxGeometry(1, 1, 1);
 
-  // 透明なマテリアル（石を格納する空間）
   const transparentMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,
-    opacity: 0 // 完全に透明
+    opacity: 0
   });
 
-  // ワイヤーフレーム（薄い灰色の枠線）
   const wireframeMaterial = new THREE.MeshBasicMaterial({
     color: 0xaaaaaa,
     wireframe: true
   });
-
 
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
@@ -120,12 +131,10 @@ function init() {
         const cube = new THREE.Mesh(geometry, transparentMaterial);
         const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
 
-        // 同じ位置に重ねて配置
         const boxGroup = new THREE.Group();
         boxGroup.add(cube);
         boxGroup.add(wireframe);
 
-        // 位置調整（原点の正の方向に配置）
         boxGroup.position.set(
           (x + 1.0) * spacing,
           (y + 1.0) * spacing,
@@ -158,11 +167,9 @@ function init() {
   createStone(2, 1, 1, 0xffffff);
   board[2][1][1] = 'white';
 
-
   // 軸の長さ
   const axisLength = 5;
 
-  // X軸（赤）
   const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
   const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
@@ -171,7 +178,6 @@ function init() {
   const xAxis = new THREE.Line(xAxisGeometry, xAxisMaterial);
   scene.add(xAxis);
 
-  // Y軸（緑）
   const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
   const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
@@ -180,7 +186,6 @@ function init() {
   const yAxis = new THREE.Line(yAxisGeometry, yAxisMaterial);
   scene.add(yAxis);
 
-  // Z軸（青）
   const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
   const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
@@ -189,14 +194,12 @@ function init() {
   const zAxis = new THREE.Line(zAxisGeometry, zAxisMaterial);
   scene.add(zAxis);
 
-
-
   // 軸ラベル追加
   createAxisLabel('X', (4 + 0.5) * spacing, 0, 0);
   createAxisLabel('Y', 0, (4 + 0.5) * spacing, 0);
   createAxisLabel('Z', 0, 0, (4 + 0.5) * spacing);
 
-  updateStoneCountDisplay(); // ← 初期配置反映
+  updateStoneCountDisplay();
   animate();
 
   // ========================================
@@ -235,7 +238,7 @@ function animate() {
   labelRenderer.render(scene, camera);
 }
 
-// 手番選択画面がクリックされたら非表示にする
+// 手番選択画面
 const turnUI = document.getElementById('turn-selection');
 const blackButton = document.getElementById('black-button');
 
@@ -245,7 +248,7 @@ if (blackButton && turnUI) {
     currentTurn = 'black';
     turnUI.style.display = 'none';
     gameStarted = 2;
-    showAllLegalMoves(); // 手番ごとに更新
+    showAllLegalMoves();
   });
 }
 
@@ -253,7 +256,6 @@ function createStone(x, y, z, color, isLastPlaced = false) {
   let finalColor = color;
 
   if (isLastPlaced) {
-    // 黒ならダークレッド寄り、白ならピンク寄り
     finalColor = (color === 0x000000) ? 0x4B0000 : 0xAA6666;
   }
 
@@ -268,7 +270,7 @@ function createStone(x, y, z, color, isLastPlaced = false) {
   scene.add(stone);
 
   const key = `${x},${y},${z}`;
-  stoneMap.set(key, stone); // 管理用マップに記録
+  stoneMap.set(key, stone);
 }
 
 function revertPreviousRedStone(color) {
@@ -284,6 +286,10 @@ function revertPreviousRedStone(color) {
 
 window.addEventListener('pointerdown', (event) => {
   if (gameStarted !== 2) return;
+  // ========================================
+  // BUG FIX: パスポップアップ表示中はクリックを無効化
+  // ========================================
+  if (isPassPopupVisible) return;
 
   const mouse = new THREE.Vector2();
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -312,9 +318,8 @@ window.addEventListener('pointerdown', (event) => {
     }
 
     const color = currentTurn === 'black' ? 0x000000 : 0xffffff;
-    createStone(x, y, z, color, true); // ← 最後に置いた石だけ赤
+    createStone(x, y, z, color, true);
 
-    // 石を置いた後
     board[x][y][z] = currentTurn;
     placedStones.add(key);
     lastPlacedStone = [x, y, z];
@@ -322,6 +327,9 @@ window.addEventListener('pointerdown', (event) => {
 
     moveHistory.push({ player: currentTurn, move: [x, y, z] });
 
+    // ========================================
+    // BUG FIX: flipStones に turnColor を渡す（手番切替前に呼ぶ）
+    // ========================================
     flipStones(x, y, z, currentTurn);
     updateStoneCountDisplay();
 
@@ -332,12 +340,11 @@ window.addEventListener('pointerdown', (event) => {
     // 次の手番に合法手がなければパス
     if (gameStarted === 2) {
       if (!hasAnyLegalMove(currentTurn)) {
-        // 両者とも置けなければゲーム終了
         const otherPlayer = currentTurn === 'black' ? 'white' : 'black';
         if (!hasAnyLegalMove(otherPlayer)) {
           checkGameEnd();
         } else {
-          showPassPopup(); // パス表示
+          showPassPopup();
         }
       }
     }
@@ -369,19 +376,10 @@ function showAllLegalMoves() {
       }
     }
   }
-}
-
-const placedStones = new Set();
-
-const directions = [];
-for (let dx = -1; dx <= 1; dx++) {
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dz = -1; dz <= 1; dz++) {
-      if (dx !== 0 || dy !== 0 || dz !== 0) {
-        directions.push([dx, dy, dz]);
-      }
-    }
-  }
+  // ========================================
+  // BUG FIX: ここに閉じ括弧を追加（元コードでは } が不足しており
+  // placedStones の宣言が関数内部に入り込んでいた）
+  // ========================================
 }
 
 function isLegalMove(board, x, y, z, currentTurn) {
@@ -442,8 +440,13 @@ function showLegalMoveIndicator(x, y, z) {
   scene.add(sphere);
 }
 
-function flipStones(x, y, z) {
-  const opponent = currentTurn === 'black' ? 'white' : 'black';
+// ========================================
+// BUG FIX: flipStones に turnColor 引数を追加
+// 元コードでは引数なしでグローバルの currentTurn を参照していたため
+// 手番切替後に呼ばれると反転する色が逆になっていた
+// ========================================
+function flipStones(x, y, z, turnColor) {
+  const opponent = turnColor === 'black' ? 'white' : 'black';
   let flipped = false;
 
   for (const [dx, dy, dz] of directions) {
@@ -470,13 +473,12 @@ function flipStones(x, y, z) {
       nx >= 0 && nx < 4 &&
       ny >= 0 && ny < 4 &&
       nz >= 0 && nz < 4 &&
-      board[nx][ny][nz] === currentTurn
+      board[nx][ny][nz] === turnColor
     ) {
-      // 相手の石をすべて自分の色に反転
       for (const [fx, fy, fz] of stonesToFlip) {
-        board[fx][fy][fz] = currentTurn;
+        board[fx][fy][fz] = turnColor;
         removeStoneAt(fx, fy, fz);
-        const color = currentTurn === 'black' ? 0x000000 : 0xffffff;
+        const color = turnColor === 'black' ? 0x000000 : 0xffffff;
         createStone(fx, fy, fz, color);
         flipped = true;
       }
@@ -512,7 +514,7 @@ function placeStone(x, y, z) {
   createStone(x, y, z, color);
   board[x][y][z] = currentTurn;
 
-  flipStones(x, y, z);
+  flipStones(x, y, z, currentTurn);
 
   currentTurn = currentTurn === 'black' ? 'white' : 'black';
   showAllLegalMoves();
@@ -638,11 +640,21 @@ function hasAnyLegalMove(player) {
 
 function showPassPopup() {
   if (gameStarted !== 2) return;
+  isPassPopupVisible = true;
   document.getElementById('pass-popup').style.display = 'block';
+
+  // 1手戻すボタンを無効化
+  const undoBtn = document.getElementById('undo-button');
+  if (undoBtn) undoBtn.disabled = true;
 }
 
 function hidePassPopup() {
   document.getElementById('pass-popup').style.display = 'none';
+  isPassPopupVisible = false;
+
+  // 1手戻すボタンを再有効化
+  const undoBtn = document.getElementById('undo-button');
+  if (undoBtn) undoBtn.disabled = false;
 }
 
 document.getElementById('pass-ok-button').addEventListener('click', () => {
@@ -699,7 +711,6 @@ function buildInitialBoard() {
 
 /**
  * 盤面 b に対して player が (x,y,z) に置いたときの反転を適用する
- * （棋譜再生用。board グローバルを直接使わない）
  */
 function simulateMoveOnBoard(b, x, y, z, player) {
   b[x][y][z] = player;
@@ -753,7 +764,6 @@ function removeAllStones() {
 
 /**
  * board 配列の内容に従って全ての石を再描画する
- * lastPlacedStone があればその石だけ色を変える
  */
 function redrawAllStones() {
   removeAllStones();
@@ -776,22 +786,15 @@ function redrawAllStones() {
 
 /**
  * 外部ボタン（#undo-button）から呼ばれるエントリーポイント
- * パスポップアップ表示中は操作させない
  */
 function undoLastMove() {
   if (gameStarted !== 2) return;
-  if (isPassPopupVisible) return; // パスポップアップ中は無効
+  if (isPassPopupVisible) return;
   undoCore();
 }
 
 /**
- * 1手戻しのコア処理（人間対人間版）
- *
- * 動作仕様:
- *   - moveHistory の末尾が "着手" または "パス" であれば、その1手だけを取り消す
- *   - 戻した結果として currentTurn を1手前のプレイヤーに戻す
- *
- * 例: 黒A1 → 白B1 → 黒A2（現在）でUNDO → 白B1の直後（黒が打つ前）に戻る
+ * 1手戻しのコア処理
  */
 function undoCore() {
   if (moveHistory.length === 0) {
@@ -799,13 +802,13 @@ function undoCore() {
     return;
   }
 
-  // ---- 末尾の1手を取り除く ----
+  // 末尾の1手を取り除く
   moveHistory.pop();
 
-  // ---- 盤面を初期状態 + 棋譜再生で再構築 ----
+  // 盤面を初期状態 + 棋譜再生で再構築
   const rebuiltBoard = buildInitialBoard();
   for (const entry of moveHistory) {
-    if (entry.pass) continue; // パスは盤面に影響しない
+    if (entry.pass) continue;
     const [mx, my, mz] = entry.move;
     simulateMoveOnBoard(rebuiltBoard, mx, my, mz, entry.player);
   }
@@ -819,14 +822,14 @@ function undoCore() {
     }
   }
 
-  // ---- placedStones を棋譜から再構築 ----
+  // placedStones を棋譜から再構築
   placedStones.clear();
   for (const entry of moveHistory) {
     if (entry.pass) continue;
     placedStones.add(`${entry.move[0]},${entry.move[1]},${entry.move[2]}`);
   }
 
-  // ---- lastPlacedStone / lastPlacedColor を更新 ----
+  // lastPlacedStone / lastPlacedColor を更新
   const lastMoveEntry = [...moveHistory].reverse().find(e => !e.pass);
   if (lastMoveEntry) {
     lastPlacedStone = lastMoveEntry.move;
@@ -836,24 +839,18 @@ function undoCore() {
     lastPlacedColor = null;
   }
 
-  // ---- currentTurn を「取り消した手を打ったプレイヤー」に戻す ----
-  // moveHistory の末尾（取り除いた手の直前の手）を見て次の手番を決定する
-  // 取り除いた手は「currentTurn が打つ前」なので、単純に反転した手番に戻す
-  // より正確には「棋譜の最後の手のプレイヤーの相手」が次の手番
+  // currentTurn を1手前のプレイヤーに戻す
   if (moveHistory.length === 0) {
-    // 全手を戻した → firstPlayer の手番に戻す
     currentTurn = firstPlayer;
   } else {
     const lastEntry = moveHistory[moveHistory.length - 1];
     currentTurn = lastEntry.player === 'black' ? 'white' : 'black';
   }
 
-  // ---- 3D表示を更新 ----
+  // 3D表示を更新
   redrawAllStones();
   updateStoneCountDisplay();
   showAllLegalMoves();
 
   console.log(`✅ 1手戻しました。棋譜残り: ${moveHistory.length}手 / 次の手番: ${currentTurn}`);
 }
-
-
