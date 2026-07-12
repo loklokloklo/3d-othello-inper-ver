@@ -86,7 +86,7 @@ function init() {
 
   controls = new OrbitControls(camera, labelRenderer.domElement);
   controls.enablePan = false;
-  controls.enableZoom = false;
+  controls.enableZoom = true;
   controls.target.set(3, 3, 3);
 
   // ライト
