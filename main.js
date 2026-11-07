@@ -479,21 +479,15 @@ function hasAnyLegalMove(player) {
 function showAllLegalMoves() {
   clearLegalMoveMarkers();
 
-  const legalMovesList = [];
-
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
         if (isLegalMove(board, x, y, z, currentTurn)) {
           showLegalMoveIndicator(x, y, z);
-          legalMovesList.push([x, y, z]);
         }
       }
     }
   }
-
-  // 開発者ツール用の分析ログ（コンソール出力）
-  logLegalMovesInfo(legalMovesList, currentTurn);
 }
 
 /** 合法手マーカーをすべて削除する */
@@ -523,82 +517,6 @@ function showLegalMoveIndicator(x, y, z) {
 
   scene.add(sphere);
 }
-
-/**
- * 【開発者ツール】各合法手について、その手で返る相手の石に隣接する空きマスの総数を
- * コンソールに出力する（局面の分析・AI開発用）。
- *
- * - 隣接は26近傍で数え、盤外は除外する
- * - 「いま置こうとしているマス」は空きマスに含めない
- * - 複数の石から参照される空きマスは1回だけ数える
- *
- * 出力形式: "(x,y,z):N" を合法手の数だけ並べる（座標は1始まり）
- */
-function logLegalMovesInfo(legalMoves, player) {
-  if (legalMoves.length === 0) return;
-
-  const opponent = player === 'black' ? 'white' : 'black';
-  const results = [];
-
-  for (const [mx, my, mz] of legalMoves) {
-    // この手で返る相手の石を集める
-    const flippedStones = [];
-
-    for (const [dx, dy, dz] of directions) {
-      const line = [];
-      let nx = mx + dx;
-      let ny = my + dy;
-      let nz = mz + dz;
-
-      while (
-        nx >= 0 && nx < size &&
-        ny >= 0 && ny < size &&
-        nz >= 0 && nz < size &&
-        board[nx][ny][nz] === opponent
-      ) {
-        line.push([nx, ny, nz]);
-        nx += dx;
-        ny += dy;
-        nz += dz;
-      }
-
-      // 方向の末端が自分の石なら、この方向の石は返る
-      if (
-        line.length > 0 &&
-        nx >= 0 && nx < size &&
-        ny >= 0 && ny < size &&
-        nz >= 0 && nz < size &&
-        board[nx][ny][nz] === player
-      ) {
-        for (const s of line) flippedStones.push(s);
-      }
-    }
-
-    // 返る石に隣接する空きマスを、重複なしで数える
-    const emptySet = new Set();
-    for (const [fx, fy, fz] of flippedStones) {
-      for (const [dx, dy, dz] of directions) {
-        const ax = fx + dx;
-        const ay = fy + dy;
-        const az = fz + dz;
-        if (
-          ax >= 0 && ax < size &&
-          ay >= 0 && ay < size &&
-          az >= 0 && az < size &&
-          board[ax][ay][az] === null &&
-          !(ax === mx && ay === my && az === mz)
-        ) {
-          emptySet.add(`${ax},${ay},${az}`);
-        }
-      }
-    }
-
-    results.push(`(${mx + 1},${my + 1},${mz + 1}):${emptySet.size}`);
-  }
-
-  console.log('[合法手 空きマス数] ' + results.join('  '));
-}
-
 
 // ============================================================
 // 石の反転
